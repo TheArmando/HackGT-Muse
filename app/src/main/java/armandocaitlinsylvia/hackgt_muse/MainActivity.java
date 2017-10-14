@@ -38,6 +38,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Environment;
@@ -144,6 +145,26 @@ public class MainActivity extends Activity implements OnClickListener {
     private double avgAlpha;
     private double avgBeta;
 
+    private double avgAlphaLong;
+    private double avgBetaLong;
+
+    private double eegLeft;
+    private double eegRight;
+
+    // For sampling
+    private double relativeX = 0.0;
+    private double relativeY = 0.0;
+    private int noOfTime = 0;
+    private double totalX = 0.0;
+    private double totalY = 0.0;
+
+    private final int SHORT_INTERVAL = 1000;
+    private final int LONG_INTERVAL = 10000;
+    private final int NUM_OF_TIMES = LONG_INTERVAL / SHORT_INTERVAL;
+
+    private long startingTime;
+    private long endTime;
+
     // Four emotions
     private enum Moods {
         HAPPY, ANGRY, RELAXED, SAD, NEUTRAL;
@@ -236,6 +257,7 @@ public class MainActivity extends Activity implements OnClickListener {
 
         // Start our asynchronous updates of the UI.
         handler.post(tickUi);
+        handler.post(getMood);
     }
 
     protected void onPause() {
@@ -286,8 +308,8 @@ public class MainActivity extends Activity implements OnClickListener {
                 muse.unregisterAllListeners();
                 muse.registerConnectionListener(connectionListener);
                 muse.registerDataListener(dataListener, MuseDataPacketType.EEG);
-                muse.registerDataListener(dataListener, MuseDataPacketType.ALPHA_RELATIVE);
-                muse.registerDataListener(dataListener, MuseDataPacketType.BETA_RELATIVE);
+                muse.registerDataListener(dataListener, MuseDataPacketType.ALPHA_ABSOLUTE);
+                muse.registerDataListener(dataListener, MuseDataPacketType.BETA_ABSOLUTE);
                 muse.registerDataListener(dataListener, MuseDataPacketType.ACCELEROMETER);
                 muse.registerDataListener(dataListener, MuseDataPacketType.BATTERY);
                 muse.registerDataListener(dataListener, MuseDataPacketType.DRL_REF);
@@ -457,12 +479,12 @@ public class MainActivity extends Activity implements OnClickListener {
 //                getAccelValues(p);
 //                accelStale = true;
 //                break;
-            case ALPHA_RELATIVE:
+            case ALPHA_ABSOLUTE:
                 assert(alphaBuffer.length >= n);
                 getEegChannelValues(alphaBuffer,p);
                 alphaStale = true;
                 break;
-            case BETA_RELATIVE:
+            case BETA_ABSOLUTE:
                 assert(betaBuffer.length >= n);
                 getEegChannelValues(betaBuffer,p);
                 betaStale = true;
@@ -519,6 +541,29 @@ public class MainActivity extends Activity implements OnClickListener {
      */
     private void initUI() {
         setContentView(R.layout.activity_listener);
+        final Button recorderButton = (Button) findViewById(R.id.recorder);
+        recorderButton.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (recorderButton.getText().toString().equals("Start Recording")) {
+                    recorderButton.setText("Stop Recording");
+                    startingTime = System.currentTimeMillis();
+                    noOfTime ++;
+                } else {
+                    recorderButton.setText("Start Recording");
+                    endTime = System.currentTimeMillis();
+                    long elapse = endTime - startingTime;
+                    // Arousal
+                    totalY += (avgBeta - avgAlpha) / (elapse / SHORT_INTERVAL);
+                    // Valence
+                    totalX += (eegLeft - eegRight) / (elapse / SHORT_INTERVAL);
+                    relativeX = totalX / noOfTime;
+                    relativeY = totalY / noOfTime;
+                    TextView result = (TextView)findViewById(R.id.avgResult);
+                    result.setText("RelativeX: " + Double.toString(relativeX) + ", RelativeY: " + Double.toString(relativeY));
+                }
+            }
+        });
         Button refreshButton = (Button) findViewById(R.id.refresh);
         refreshButton.setOnClickListener(this);
         Button connectButton = (Button) findViewById(R.id.connect);
@@ -557,9 +602,33 @@ public class MainActivity extends Activity implements OnClickListener {
             if (betaStale) {
                 updateBeta();
             }
+
+            handler.postDelayed(tickUi, SHORT_INTERVAL);
+        }
+    };
+
+    private final Runnable recordAverage = new Runnable() {
+        @Override
+        public void run() {
+
+        }
+    };
+
+    /**
+     * The following runnable deals with updating the mood
+     */
+    private Runnable getMood = new Runnable() {
+        @Override
+        public void run() {
+            avgAlphaLong = avgAlphaLong / NUM_OF_TIMES;
+            avgBetaLong = avgBetaLong / NUM_OF_TIMES;
+            eegLeft = eegLeft / NUM_OF_TIMES;
+            eegRight = eegRight / NUM_OF_TIMES;
             TextView yourMood = (TextView)findViewById(R.id.mood);
-            yourMood.setText(determineMood().toString());
-            handler.postDelayed(tickUi, 2000);
+            yourMood.setText(determineMood());
+            avgAlphaLong = 0;
+            avgBetaLong = 0;
+            handler.postDelayed(getMood, LONG_INTERVAL);
         }
     };
 
@@ -585,6 +654,9 @@ public class MainActivity extends Activity implements OnClickListener {
         fp1.setText(String.format("%6.2f", eegBuffer[1]));
         fp2.setText(String.format("%6.2f", eegBuffer[2]));
         tp10.setText(String.format("%6.2f", eegBuffer[3]));
+
+        eegLeft += eegBuffer[0] + eegBuffer[1];
+        eegRight += eegBuffer[2] + eegBuffer[3];
     }
 
     private void updateAlpha() {
@@ -597,9 +669,11 @@ public class MainActivity extends Activity implements OnClickListener {
         TextView elem4 = (TextView)findViewById(R.id.elem4);
         elem4.setText(String.format("%6.2f", alphaBuffer[3]));
 
-        avgAlpha = (alphaBuffer[0] + alphaBuffer[1] + alphaBuffer[2] + alphaBuffer[3]) / 4;
+        avgAlpha = getAvg(alphaBuffer[0], alphaBuffer[1], alphaBuffer[2], alphaBuffer[3]);
         TextView avg1 = (TextView)findViewById(R.id.avgAlpha);
         avg1.setText("Average: " + String.format("%6.2f", avgAlpha));
+
+        avgAlphaLong += avgAlpha;
     }
 
     private void updateBeta() {
@@ -612,14 +686,41 @@ public class MainActivity extends Activity implements OnClickListener {
         TextView beta4 = (TextView)findViewById(R.id.beta4);
         beta4.setText(String.format("%6.2f", betaBuffer[3]));
 
-        avgBeta = (betaBuffer[0] + betaBuffer[1] + betaBuffer[2] + betaBuffer[3]) / 4;
+        avgBeta = getAvg(betaBuffer[0], betaBuffer[1], betaBuffer[2], betaBuffer[3]);
         TextView avg2 = (TextView)findViewById(R.id.avgBeta);
         avg2.setText("Average: " + String.format("%6.2f", avgBeta));
+
+        avgBetaLong += avgBeta;
+    }
+
+    private double getAvg(double... nums) {
+        double sum = 0;
+        int count = 0;
+        for (double d : nums) {
+            if (d > 0) {
+                sum += d;
+                count ++;
+            }
+        }
+        return (count > 0)?(sum / count):0;
     }
 
     // Determine which mood the user is in
-    private Moods determineMood() {
-        return (Moods.NEUTRAL);
+    private String determineMood() {
+        // Change valence values
+        double valence = Math.round(eegRight / 50 - eegLeft / 50  - relativeX / 50);
+        double arousal = Math.round(avgBetaLong * 100 - avgAlphaLong * 100 - relativeY * 100);
+        String coordinates = ": (" + valence + ", " + arousal + ")";
+        if ((arousal > 0) && (valence > 0)) {
+            return (Moods.HAPPY.toString() + coordinates);
+        } else if ((arousal > 0) && (valence < 0)) {
+            return (Moods.ANGRY.toString() + coordinates);
+        } else if ((arousal < 0) && (valence > 0)) {
+            return (Moods.RELAXED.toString() + coordinates);
+        } else if ((arousal < 0) && (valence < 0)) {
+            return (Moods.SAD.toString() + coordinates);
+        }
+        return (Moods.NEUTRAL.toString() + coordinates);
     }
 
 
