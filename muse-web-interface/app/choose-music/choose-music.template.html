@@ -8,6 +8,7 @@
               <h3>Happy</h3>
               <div  ng-repeat="song in $ctrl.happyMusicArray">
                 <a href="{{song.link}}">{{song.link}}</a>
+                <button class="btn btn-danger" ng-click="$ctrl.deleteSong('happy',song.link)">Delete</button>
               </div>
               <!-- <button class="btn btn-raised btn-success btn-xs" ng-click="$ctrl.addSong(\"Happy\", happySongLink)">
                         Add Song
@@ -27,6 +28,7 @@
                 <h3>Sad</h3>
                 <div  ng-repeat="song in $ctrl.sadMusicArray">
                   <a href="{{song.link}}">{{song.link}}</a>
+                  <button class="btn btn-danger" ng-click="$ctrl.deleteSong('sad',song.link)">Delete</button>
                 </div>
                 <form ng-submit = "$ctrl.addSong('sad', $ctrl.inputNewSadSongLink); $ctrl.inputNewSadSongLink = null" class="form-inline" style="width: 100%">
                    <div class="form-group" style="margin-top: 5px; width: 100%">
@@ -41,6 +43,7 @@
                   <h3>Angry</h3>
                   <div  ng-repeat="song in $ctrl.angryMusicArray">
                     <a href="{{song.link}}">{{song.link}}</a>
+                    <button class="btn btn-danger" ng-click="$ctrl.deleteSong('angry',song.link)">Delete</button>
                   </div>
                   <form ng-submit = "$ctrl.addSong('angry', $ctrl.inputNewAngrySongLink); $ctrl.inputNewAngrySongLink = null" class="form-inline" style="width: 100%">
                      <div class="form-group" style="margin-top: 5px; width: 100%">
@@ -55,6 +58,7 @@
                     <h3>Relaxed</h3>
                     <div  ng-repeat="song in $ctrl.relaxedMusicArray">
                       <a href="{{song.link}}">{{song.link}}</a>
+                      <button class="btn btn-danger" ng-click="$ctrl.deleteSong('relaxed',song.link)">Delete</button>
                     </div>
                     <form ng-submit = "$ctrl.addSong('relaxed', $ctrl.inputNewRelaxedSongLink); $ctrl.inputNewRelaxedSongLink = null" class="form-inline" style="width: 100%">
                        <div class="form-group" style="margin-top: 5px; width: 100%">
@@ -69,6 +73,7 @@
                       <h3>Neutral</h3>
                       <div  ng-repeat="song in $ctrl.neutralMusicArray">
                         <a href="{{song.link}}">{{song.link}}</a>
+                        <button class="btn btn-danger" ng-click="$ctrl.deleteSong('neutral',song.link)">Delete</button>
                       </div>
                       <form ng-submit = "$ctrl.addSong('neutral', $ctrl.inputNewNeutralSongLink); $ctrl.inputNewNeutralSongLink = null" class="form-inline" style="width: 100%">
                          <div class="form-group" style="margin-top: 5px; width: 100%">

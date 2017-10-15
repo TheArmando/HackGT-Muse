@@ -15,11 +15,14 @@ angular.module('chooseMusic').component('chooseMusic', {
 
         self.addSong = function(songtype, songLink) {
           if (songLink && songLink.length > 0) {
-            console.log(songLink);
-            self.chooseMusicRef.child(songtype).push({
+            self.chooseMusicRef.child(songtype).child(songLink.split('/')[songLink.split('/').length - 1]).set({
               link: songLink
             });
           }
+        };
+
+        self.deleteSong = function(songtype, songLink) {
+            self.chooseMusicRef.child(songtype).child(songLink.split('/')[songLink.split('/').length - 1]).set(null);
         };
 
     }]
