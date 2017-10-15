@@ -11,9 +11,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.choosemuse.libmuse.Accelerometer;
 import com.choosemuse.libmuse.AnnotationData;
 import com.choosemuse.libmuse.ConnectionState;
 import com.choosemuse.libmuse.Eeg;
@@ -35,16 +35,6 @@ import com.choosemuse.libmuse.MuseManagerAndroid;
 import com.choosemuse.libmuse.MuseVersion;
 import com.choosemuse.libmuse.Result;
 import com.choosemuse.libmuse.ResultLevel;
-import com.spotify.sdk.android.authentication.AuthenticationClient;
-import com.spotify.sdk.android.authentication.AuthenticationRequest;
-import com.spotify.sdk.android.authentication.AuthenticationResponse;
-import com.spotify.sdk.android.player.Config;
-import com.spotify.sdk.android.player.ConnectionStateCallback;
-import com.spotify.sdk.android.player.Error;
-import com.spotify.sdk.android.player.Player;
-import com.spotify.sdk.android.player.PlayerEvent;
-import com.spotify.sdk.android.player.Spotify;
-import com.spotify.sdk.android.player.SpotifyPlayer;
 
 import android.Manifest;
 import android.app.Activity;
@@ -52,16 +42,19 @@ import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Looper;
 import android.os.Handler;
-import android.support.v4.app.Fragment;
 import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.bluetooth.BluetoothAdapter;
@@ -71,14 +64,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 
 import org.w3c.dom.Text;
-
-import kaaes.spotify.webapi.android.SpotifyApi;
-import kaaes.spotify.webapi.android.SpotifyService;
-import kaaes.spotify.webapi.android.models.Pager;
-import kaaes.spotify.webapi.android.models.PlaylistSimple;
-import kaaes.spotify.webapi.android.models.PlaylistTrack;
-import retrofit.Callback;
-import retrofit.RetrofitError;
 
 /**
  * This example will illustrate how to connect to a Muse headband,
@@ -101,56 +86,14 @@ import retrofit.RetrofitError;
  * 7. You can pause/resume data transmission with the button at the bottom of the screen.
  * 8. To disconnect from the headband, press "Disconnect"
  */
-public class MainActivity extends Activity implements OnClickListener,
-        SpotifyPlayer.NotificationCallback,
-        ConnectionStateCallback {
-
-    // Spotify variables are here
-
-    // TODO: Replace with your client ID
-    private static final String CLIENT_ID = "2a41fbadd1084964ad05307f4fc7bb93";
-    // TODO: Replace with your redirect URI
-    private static final String REDIRECT_URI = "hackgtspotify://callback";
-    private static final String AUTHENTICATION_URL = "https://accounts.spotify.com/authorize";
-
-    private static PlaylistSimple thePlaylist;
-
-    // Request code that will be used to verify if the result comes from correct activity
-    // Can be any integer
-    private static final int REQUEST_CODE = 1337;
-
-    private String accessToken = "";
-    final String url ="https://api.spotify.com/v1/users/{user_id}/playlists/{playlist_id}/track";
-    String userId = "armando75x";
-
-    private Player mPlayer;
-    private SpotifyService spotify;
-
-
-    /*
-    HashMap<String, String> happyMusicList = new HashMap<>();
-    HashMap<String, String> sadMusicList = new HashMap<>();
-    HashMap<String, String> angryMusicList = new HashMap<>();
-    HashMap<String, String> relaxedMusicList = new HashMap<>();
-    */
-
-    ArrayList<String> happyMusicList = new ArrayList<>();
-    ArrayList<String> sadMusicList = new ArrayList<>();
-    ArrayList<String> angryMusicList = new ArrayList<>();
-    ArrayList<String> relaxedMusicList = new ArrayList<>();
-
-    int happyMusicListIndex = 0;
-    int sadMusicListIndex = 0;
-    int angryMusicListIndex = 0;
-    int relaxedMusicListIndex = 0;
-
-    ////////////////////////
-
+public class MainActivity extends Activity implements OnClickListener {
 
     /**
      * Tag used for logging purposes.
      */
     private final String TAG = "TestLibMuseAndroid";
+
+    private MediaPlayer mediaPlayer;
 
     /**
      * The MuseManager is how you detect Muse headbands and receive notifications
@@ -201,7 +144,7 @@ public class MainActivity extends Activity implements OnClickListener,
     private boolean eegStale;
     private final double[] alphaBuffer = new double[6];
     private boolean alphaStale;
-//    private final double[] accelBuffer = new double[3];
+    //    private final double[] accelBuffer = new double[3];
 //    private boolean accelStale;
     private final double[] betaBuffer = new double[6];
     private boolean betaStale;
@@ -281,6 +224,16 @@ public class MainActivity extends Activity implements OnClickListener,
      */
     private final AtomicReference<Handler> fileHandler = new AtomicReference<>();
 
+    private TextView song;
+    private TextView artist;
+    private TextView emotion;
+    private TextView oppEmotion;
+
+    private boolean connected = false;
+
+    private long beginTime;
+    private long stopTime;
+
 
     //--------------------------------------
     // Lifecycle / Connection code
@@ -289,7 +242,8 @@ public class MainActivity extends Activity implements OnClickListener,
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
+        initializeMap();
+        beginTime = System.currentTimeMillis();
         // We need to set the context on MuseManagerAndroid before we can do anything.
         // This must come before other LibMuse API calls as it also loads the library.
         manager = MuseManagerAndroid.getInstance();
@@ -307,6 +261,11 @@ public class MainActivity extends Activity implements OnClickListener,
         // we can connect to.
         manager.setMuseListener(new MuseL(weakActivity));
 
+        // Refresh the listener
+        manager.stopListening();
+
+        manager.startListening();
+
         // Muse 2016 (MU-02) headbands use Bluetooth Low Energy technology to
         // simplify the connection process.  This requires access to the COARSE_LOCATION
         // or FINE_LOCATION permissions.  Make sure we have these permissions before
@@ -322,59 +281,66 @@ public class MainActivity extends Activity implements OnClickListener,
 
         // Start our asynchronous updates of the UI.
         handler.post(tickUi);
+//        stopTime = System.currentTimeMillis();
+//        if (connected) {
+//            handler.post(getMood);
+//        } else if (stopTime - beginTime >= 20000) {
+//            Intent songIntent = new Intent(Intent.ACTION_VIEW);
+//            songIntent.setData(Uri.parse(getSong("happy")));
+//            startActivity(songIntent);
+//        }
         handler.post(getMood);
-
-
-        // Spotify Initialization
-        AuthenticationRequest.Builder builder = new AuthenticationRequest.Builder(CLIENT_ID,
-                AuthenticationResponse.Type.TOKEN,
-                REDIRECT_URI);
-        builder.setScopes(new String[]{"user-read-private", "streaming"});
-        AuthenticationRequest request = builder.build();
-        AuthenticationClient.openLoginActivity(this, REQUEST_CODE, request);
-
-        /*
-        happyMusicList.put("Pharrell Williams - Happy", "6NPVjNh8Jhru9xOmyQigds");
-        happyMusicList.put("The Fratellis - Whistle For The Choir", "3jp7Ryj1sX3riA7NQaVlLd");
-        happyMusicList.put("Emma Stevens - A Place Called You", "4NBghCuVbhxnXWnMcRHXOt");
-        happyMusicList.put("Hollywood Ending - Not Another Song About Love", "3Ar4cp3V0SeWXEuRelC86p");
-
-        sadMusicList.put("Coldplay - Fix You", "7LVHVU3tWfcxj5aiPFEW4Q");
-        sadMusicList.put("Clair De Lune - Debussy", "6N7JzrteJv8lsr1GWYyu0b");
-        sadMusicList.put("The Girl with the Flaxen Hair - Debussy.", "3QCPCz4cU4LxHL4e0Y7Kpy");
-
-        angryMusicList.put("Disturbed - Stricken", "6RJdYpFQwLyNfDc5FbjkgV");
-        angryMusicList.put("Disturbed - Asylum", "3VZWVvHjzkG60FyVUkTcy5");
-        angryMusicList.put("Wake Up - Remastered", "2QiqwOVUctPRVggO9G1Zs5");
-
-        relaxedMusicList.put("Spirit Cold - Tall Heights", "1vG6jMgSoqT3zG9tuDrL2E");
-        relaxedMusicList.put("Weather - Molly Parden", "1WwAqeweh8B5WVO041pRFf");
-        relaxedMusicList.put("Alexander Jean - Whiskey and Morphine", "");
-        relaxedMusicList.put("Christina Perri - A Thousand Years", "6lanRgr6wXibZr8KgzXxBl");
-        */
-
-        happyMusicList.add("6NPVjNh8Jhru9xOmyQigds");
-        happyMusicList.add("3jp7Ryj1sX3riA7NQaVlLd");
-        happyMusicList.add("4NBghCuVbhxnXWnMcRHXOt");
-        happyMusicList.add("3Ar4cp3V0SeWXEuRelC86p");
-
-        sadMusicList.add("7LVHVU3tWfcxj5aiPFEW4Q");
-        sadMusicList.add("6N7JzrteJv8lsr1GWYyu0b");
-        sadMusicList.add("3QCPCz4cU4LxHL4e0Y7Kpy");
-
-        angryMusicList.add( "6RJdYpFQwLyNfDc5FbjkgV");
-        angryMusicList.add("3VZWVvHjzkG60FyVUkTcy5");
-        angryMusicList.add("2QiqwOVUctPRVggO9G1Zs5");
-
-        relaxedMusicList.add("1vG6jMgSoqT3zG9tuDrL2E");
-        relaxedMusicList.add("1WwAqeweh8B5WVO041pRFf");
-        relaxedMusicList.add( "7j4rAHvJaQLbxstJ1TnHu9");
-        relaxedMusicList.add("6lanRgr6wXibZr8KgzXxBl");
 
 
     }
 
-    public void onPause() {
+    private Map<String, List<String>> songMap = new HashMap<>();
+    //open.spotify.com/track
+    private void initializeMap() {
+        List<String> happyList = new ArrayList<>();
+        happyList.add("6NPVjNh8Jhru9xOmyQigds");
+        happyList.add("3jp7Ryj1sX3riA7NQaVlLd");
+        happyList.add("22XNWA1302bLyc25GyvdP3");
+        happyList.add("5z8qQvLYEehH19vNOoFAPb");
+        happyList.add("3Ar4cp3V0SeWXEuRelC86p");
+        happyList.add("5sTC1imYc0QzNe3i5snLy7");
+
+        List<String> sadList = new ArrayList<>();
+        sadList.add("7LVHVU3tWfcxj5aiPFEW4Q");
+        sadList.add("6N7JzrteJv8lsr1GWYyu0b");
+        sadList.add("3QCPCz4cU4LxHL4e0Y7Kpy");
+        sadList.add("6zeE5tKyr8Nu882DQhhSQI");
+        sadList.add("6mFkJmJqdDVQ1REhVfGgd1");
+
+        List<String> angryList = new ArrayList<>();
+        angryList.add("6RJdYpFQwLyNfDc5FbjkgV");
+        angryList.add("3VZWVvHjzkG60FyVUkTcy5");
+        angryList.add("2QiqwOVUctPRVggO9G1Zs5");
+        angryList.add("1hR0fIFK2qRG3f3RF70pb7");
+
+        List<String> relaxedList = new ArrayList<>();
+        relaxedList.add("1vG6jMgSoqT3zG9tuDrL2E");
+        relaxedList.add("1WwAqeweh8B5WVO041pRFf");
+
+        List<String> neutralList = new ArrayList<>();
+        neutralList.add("7j4rAHvJaQLbxstJ1TnHu9");
+        neutralList.add("6lanRgr6wXibZr8KgzXxBl");
+        neutralList.addAll(relaxedList);
+        neutralList.addAll(happyList);
+
+        songMap.put("happy", happyList);
+        songMap.put("sad", sadList);
+        songMap.put("angry", angryList);
+        songMap.put("sad", sadList);
+        songMap.put("neutral",neutralList);
+    }
+
+    private String getSong(String key) {
+        int index = (int)(Math.random() * songMap.get(key).size());
+        return "https://open.spotify.com/track/" + songMap.get(key).get(index);
+    }
+
+    protected void onPause() {
         super.onPause();
         // It is important to call stopListening when the Activity is paused
         // to avoid a resource leak from the LibMuse library.
@@ -393,6 +359,7 @@ public class MainActivity extends Activity implements OnClickListener,
             // Start listening for nearby or paired Muse headbands. We call stopListening
             // first to make sure startListening will clear the list of headbands and start fresh.
             manager.stopListening();
+
             manager.startListening();
 
         } else if (v.getId() == R.id.connect) {
@@ -413,8 +380,8 @@ public class MainActivity extends Activity implements OnClickListener,
                 Log.w(TAG, "There is nothing to connect to");
             } else {
 
-                // Cache the Muse that the user has selected.
-                muse = availableMuses.get(musesSpinner.getSelectedItemPosition());
+                // Connect to the first Muse by default
+                muse = availableMuses.get(0);
                 // Unregister all prior listeners and register our data listener to
                 // receive the MuseDataPacketTypes we are interested in.  If you do
                 // not register a listener for a particular data type, you will not
@@ -552,6 +519,10 @@ public class MainActivity extends Activity implements OnClickListener,
             }
         });
 
+        if (current == ConnectionState.CONNECTED) {
+            connected = true;
+        }
+
         if (current == ConnectionState.DISCONNECTED) {
             Log.i(TAG, "Muse disconnected:" + muse.getName());
             // Save the data file once streaming has stopped.
@@ -673,11 +644,10 @@ public class MainActivity extends Activity implements OnClickListener,
                     totalX += (eegLeft - eegRight) / (elapse / SHORT_INTERVAL);
                     relativeX = totalX / noOfTime;
                     relativeY = totalY / noOfTime;
-                    TextView result = (TextView)findViewById(R.id.avgResult);
-                    result.setText("RelativeX: " + Double.toString(relativeX) + ", RelativeY: " + Double.toString(relativeY));
                 }
             }
         });
+
         Button refreshButton = (Button) findViewById(R.id.refresh);
         refreshButton.setOnClickListener(this);
         Button connectButton = (Button) findViewById(R.id.connect);
@@ -721,13 +691,8 @@ public class MainActivity extends Activity implements OnClickListener,
         }
     };
 
-    private final Runnable recordAverage = new Runnable() {
-        @Override
-        public void run() {
 
-        }
-    };
-
+    private boolean playingMusic = false;
     /**
      * The following runnable deals with updating the mood
      */
@@ -738,8 +703,61 @@ public class MainActivity extends Activity implements OnClickListener,
             avgBetaLong = avgBetaLong / NUM_OF_TIMES;
             eegLeft = eegLeft / NUM_OF_TIMES;
             eegRight = eegRight / NUM_OF_TIMES;
-            TextView yourMood = (TextView)findViewById(R.id.mood);
-            yourMood.setText(determineMood());
+
+            //ImageView background = (ImageView) findViewById(R.id.background_img);
+            if (!playingMusic) {
+                stopTime = System.currentTimeMillis();
+                if (connected) {
+                    String url = getSong(determineMood().toLowerCase());
+                    TextView mood = (TextView)findViewById(R.id.mood);
+                    mood.setText("You are feeling " + determineMood().toLowerCase());
+                    Intent songIntent = new Intent(Intent.ACTION_VIEW);
+                    songIntent.setData(Uri.parse(url));
+                    startActivity(songIntent);
+                    playingMusic = true;
+                } else if (stopTime - beginTime >= 25000) {
+                    playingMusic = true;
+                    TextView mood = (TextView)findViewById(R.id.mood);
+                    mood.setText("You are feeling happy");
+                    Intent songIntent = new Intent(Intent.ACTION_VIEW);
+                    songIntent.setData(Uri.parse(getSong("happy")));
+                    startActivity(songIntent);
+                }
+            }
+
+
+//            artist.setText(currentSong.artist);
+//            song.setText(currentSong.name);
+//
+//            // If no other song is playing, update the whole thing
+//            if (!mediaPlayer.isPlaying()) {
+//
+//            }
+//            if(mood.toLowerCase().equals("happy")) {
+//                emotion.setText("happy");
+//                oppEmotion.setText("sad");
+//                background.setImageResource(R.drawable.happy2);
+//            }
+//            else if(mood.toLowerCase().equals("sad")){
+//                emotion.setText("sad");
+//                oppEmotion.setText("happy");
+//                background.setImageResource(R.drawable.sad2);
+//            }
+//            else if(mood.toLowerCase().equals("angry")) {
+//                emotion.setText("angry");
+//                oppEmotion.setText("relaxed");
+//                background.setImageResource(R.drawable.angry1);
+//            }
+//            else if(mood.toLowerCase().equals("relaxed")) {
+//                emotion.setText("relaxed");
+//                oppEmotion.setText("angry");
+//                background.setImageResource(R.drawable.neutral1);
+//            }
+//            else {
+//                emotion.setText("neutral");
+//                oppEmotion.setText("neutral");
+//                background.setImageResource(R.drawable.neutral2);
+//            }
             avgAlphaLong = 0;
             avgBetaLong = 0;
             handler.postDelayed(getMood, LONG_INTERVAL);
@@ -784,8 +802,6 @@ public class MainActivity extends Activity implements OnClickListener,
         elem4.setText(String.format("%6.2f", alphaBuffer[3]));
 
         avgAlpha = getAvg(alphaBuffer[0], alphaBuffer[1], alphaBuffer[2], alphaBuffer[3]);
-        TextView avg1 = (TextView)findViewById(R.id.avgAlpha);
-        avg1.setText("Average: " + String.format("%6.2f", avgAlpha));
 
         avgAlphaLong += avgAlpha;
     }
@@ -801,8 +817,6 @@ public class MainActivity extends Activity implements OnClickListener,
         beta4.setText(String.format("%6.2f", betaBuffer[3]));
 
         avgBeta = getAvg(betaBuffer[0], betaBuffer[1], betaBuffer[2], betaBuffer[3]);
-        TextView avg2 = (TextView)findViewById(R.id.avgBeta);
-        avg2.setText("Average: " + String.format("%6.2f", avgBeta));
 
         avgBetaLong += avgBeta;
     }
@@ -824,17 +838,16 @@ public class MainActivity extends Activity implements OnClickListener,
         // Change valence values
         double valence = Math.round(eegRight / 50 - eegLeft / 50  - relativeX / 50);
         double arousal = Math.round(avgBetaLong * 100 - avgAlphaLong * 100 - relativeY * 100);
-        String coordinates = ": (" + valence + ", " + arousal + ")";
         if ((arousal > 0) && (valence > 0)) {
-            return (Moods.HAPPY.toString() + coordinates);
+            return (Moods.HAPPY.toString());
         } else if ((arousal > 0) && (valence < 0)) {
-            return (Moods.ANGRY.toString() + coordinates);
+            return (Moods.ANGRY.toString());
         } else if ((arousal < 0) && (valence > 0)) {
-            return (Moods.RELAXED.toString() + coordinates);
+            return (Moods.RELAXED.toString());
         } else if ((arousal < 0) && (valence < 0)) {
-            return (Moods.SAD.toString() + coordinates);
+            return (Moods.SAD.toString());
         }
-        return (Moods.NEUTRAL.toString() + coordinates);
+        return (Moods.NEUTRAL.toString());
     }
 
 
@@ -933,8 +946,8 @@ public class MainActivity extends Activity implements OnClickListener,
             long timestamp = fileReader.getMessageTimestamp();
 
             Log.i(tag, "type: " + type.toString() +
-                  " id: " + Integer.toString(id) +
-                  " timestamp: " + String.valueOf(timestamp));
+                    " id: " + Integer.toString(id) +
+                    " timestamp: " + String.valueOf(timestamp));
 
             switch(type) {
                 // EEG messages contain raw EEG data or DRL/REF data.
@@ -970,182 +983,6 @@ public class MainActivity extends Activity implements OnClickListener,
         }
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
-        super.onActivityResult(requestCode, resultCode, intent);
-
-        // Check if result comes from the correct activity
-        if (requestCode == REQUEST_CODE) {
-            AuthenticationResponse response = AuthenticationClient.getResponse(resultCode, intent);
-            if (response.getType() == AuthenticationResponse.Type.TOKEN) {
-                Config playerConfig = new Config(this, response.getAccessToken(), CLIENT_ID);
-                accessToken = response.getAccessToken();
-                Spotify.getPlayer(playerConfig, this, new SpotifyPlayer.InitializationObserver() {
-                    @Override
-                    public void onInitialized(SpotifyPlayer spotifyPlayer) {
-                        mPlayer = spotifyPlayer;
-                        mPlayer.addConnectionStateCallback(MainActivity.this);
-                        mPlayer.addNotificationCallback(MainActivity.this);
-                    }
-
-                    @Override
-                    public void onError(Throwable throwable) {
-                        Log.e("MainActivity", "Could not initialize player: " + throwable.getMessage());
-                    }
-                });
-
-
-            }
-        }
-    }
-
-    @Override
-    public void onPlaybackEvent(PlayerEvent playerEvent) {
-        Log.d("MainActivity", "Playback event received: " + playerEvent.name());
-        switch (playerEvent) {
-            // Handle event type as necessary
-            default:
-                break;
-        }
-    }
-
-    @Override
-    public void onPlaybackError(Error error) {
-        Log.d("MainActivity", "Playback error received: " + error.name());
-        switch (error) {
-            // Handle error type as necessary
-            default:
-                break;
-        }
-    }
-
-
-    @Override
-    public void onLoggedOut() {
-        Log.d("MainActivity", "User logged out");
-    }
-
-    @Override
-    public void onLoginFailed(Error error) {
-        Log.d("MainActivity", "Login failed - " + error.toString());
-    }
-
-    @Override
-    public void onLoggedIn() {
-        Log.d("MainActivity", "User logged in");
-
-        SpotifyApi api = new SpotifyApi();
-
-        // Most (but not all) of the Spotify Web API endpoints require authorisation.
-        // If you know you'll only use the ones that don't require authorisation you can skip this step
-        api.setAccessToken(accessToken);
-        spotify = api.getService();
-
-        playMusicBasedOnMood();
-
-        /*
-        spotify.getPlaylists(userId, new Callback<Pager<PlaylistSimple>>() {
-            @Override
-            public void success(Pager<PlaylistSimple> lPlaylist, retrofit.client.Response response) {
-                Log.d("Playlist Success", lPlaylist.toString());
-                Log.d("Playlist Success", response.toString());
-                Log.d("Playlist URI - ", lPlaylist.items.get(0).uri);
-                //playlistId = lPlaylist.items.get(0).uri;
-                tracksTest(spotify, lPlaylist.items.get(0).id);
-                for (PlaylistSimple p : lPlaylist.items) {
-                    // Log.d("Playlist URI - ", p.uri);
-                    //mPlayer.playUri(null, p.uri, 0, 0);
-                    //mPlayer.queue(null, p.uri);
-                    //PlaylistTracksInformation x = p.tracks;
-                    //Log.d("PlaylistTracksInfo", x.href);
-                }
-
-            }
-
-            @Override
-            public void failure(RetrofitError error) {
-                Log.d("Playlist failure", error.toString());
-            }
-        });
-        */
-    }
-
-    private void playMusicBasedOnMood() {
-        /*
-        if ((arousal > 0) && (valence > 0)) {
-            return (Moods.HAPPY.toString() + coordinates);
-        } else if ((arousal > 0) && (valence < 0)) {
-            return (Moods.ANGRY.toString() + coordinates);
-        } else if ((arousal < 0) && (valence > 0)) {
-            return (Moods.RELAXED.toString() + coordinates);
-        } else if ((arousal < 0) && (valence < 0)) {
-            return (Moods.SAD.toString() + coordinates);
-        }
-
-         */
-
-        String mood = determineMood();
-        if (mood.startsWith("HAPPY")) {
-            mPlayer.playUri(null, happyMusicList.get(happyMusicListIndex), 0, 0);
-            happyMusicListIndex++;
-        } else if (mood.startsWith("ANGRY")) {
-            mPlayer.playUri(null, angryMusicList.get(angryMusicListIndex), 0, 0);
-            angryMusicListIndex++;
-        } else if (mood.startsWith("SAD")) {
-            mPlayer.playUri(null, sadMusicList.get(sadMusicListIndex), 0, 0);
-            sadMusicListIndex++;
-        } else {
-            mPlayer.playUri(null, relaxedMusicList.get(relaxedMusicListIndex), 0, 0);
-            relaxedMusicListIndex++;
-        }
-
-    }
-
-    private void tracksTest(SpotifyService spotify, String playlistId) {
-
-        spotify.getPlaylistTracks(userId, playlistId, null, new Callback<Pager<PlaylistTrack>>() {
-            @Override
-            public void success(Pager<PlaylistTrack> playlistTrackPager, retrofit.client.Response response) {
-
-                for (PlaylistTrack t : playlistTrackPager.items) {
-                    Log.d("PlaylistTrack", t.track.uri);
-                    //mPlayer.queue(null, t.track.uri);
-                }
-                mPlayer.playUri(null, playlistTrackPager.items.get(0).track.uri, 0, 0);
-                Log.d("PlaylistTrack", "Attempting to play " + playlistTrackPager.items.get(0).track.uri);
-            }
-
-            @Override
-            public void failure(RetrofitError error) {
-                Log.d("PlayListTrack FAILURE", error.toString());
-            }
-        });
-    }
-
-    /*@Override
-    public void onLoginFailed(Error error) {
-        Log.d("MainActivity", "Login failed - " + error.toString());
-    }*/
-
-    @Override
-    public void onTemporaryError() {
-        Log.d("MainActivity", "Temporary error occurred");
-    }
-
-    @Override
-    public void onConnectionMessage(String message) {
-        Log.d("MainActivity", "Received connection message: " + message);
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-
-        Spotify.destroyPlayer(this);
-        super.onDestroy();
-    }
-
-
     //--------------------------------------
     // Listener translators
     //
@@ -1177,8 +1014,6 @@ public class MainActivity extends Activity implements OnClickListener,
         }
     }
 
-
-
     class DataListener extends MuseDataListener {
         final WeakReference<MainActivity> activityRef;
 
@@ -1195,6 +1030,5 @@ public class MainActivity extends Activity implements OnClickListener,
         public void receiveMuseArtifactPacket(final MuseArtifactPacket p, final Muse muse) {
             activityRef.get().receiveMuseArtifactPacket(p, muse);
         }
-
     }
 }
