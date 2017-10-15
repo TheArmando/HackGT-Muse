@@ -35,6 +35,11 @@ import com.choosemuse.libmuse.MuseManagerAndroid;
 import com.choosemuse.libmuse.MuseVersion;
 import com.choosemuse.libmuse.Result;
 import com.choosemuse.libmuse.ResultLevel;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import android.Manifest;
 import android.app.Activity;
@@ -69,20 +74,20 @@ import org.w3c.dom.Text;
  * This example will illustrate how to connect to a Muse headband,
  * register for and receive EEG data and disconnect from the headband.
  * Saving EEG data to a .muse file is also covered.
- *
+ * <p>
  * For instructions on how to pair your headband with your Android device
  * please see:
  * http://developer.choosemuse.com/hardware-firmware/bluetooth-connectivity/developer-sdk-bluetooth-connectivity-2
- *
+ * <p>
  * Usage instructions:
  * 1. Pair your headband if necessary.
  * 2. Run this project.
  * 3. Turn on the Muse headband.
  * 4. Press "Refresh". It should display all paired Muses in the Spinner drop down at the
- *    top of the screen.  It may take a few seconds for the headband to be detected.
+ * top of the screen.  It may take a few seconds for the headband to be detected.
  * 5. Select the headband you want to connect to and press "Connect".
  * 6. You should see EEG and accelerometer data as well as connection status,
- *    version information and relative alpha values appear on the screen.
+ * version information and relative alpha values appear on the screen.
  * 7. You can pause/resume data transmission with the button at the bottom of the screen.
  * 8. To disconnect from the headband, press "Disconnect"
  */
@@ -112,7 +117,7 @@ public class MainActivity extends Activity implements OnClickListener {
      * The ConnectionListener will be notified whenever there is a change in
      * the connection state of a headband, for example when the headband connects
      * or disconnects.
-     *
+     * <p>
      * Note that ConnectionListener is an inner class at the bottom of this file
      * that extends MuseConnectionListener.
      */
@@ -121,7 +126,7 @@ public class MainActivity extends Activity implements OnClickListener {
     /**
      * The DataListener is how you will receive EEG (and other) data from the
      * headband.
-     *
+     * <p>
      * Note that DataListener is an inner class at the bottom of this file
      * that extends MuseDataListener.
      */
@@ -131,11 +136,11 @@ public class MainActivity extends Activity implements OnClickListener {
      * Data comes in from the headband at a very fast rate; 220Hz, 256Hz or 500Hz,
      * depending on the type of headband and the preset configuration.  We buffer the
      * data that is read until we can update the UI.
-     *
+     * <p>
      * The stale flags indicate whether or not new data has been received and the buffers
      * hold the values of the last data packet received.  We are displaying the EEG, ALPHA_RELATIVE
      * and ACCELEROMETER values in this example.
-     *
+     * <p>
      * Note: the array lengths of the buffers are taken from the comments in
      * MuseDataPacketType, which specify 3 values for accelerometer and 6
      * values for EEG and EEG-derived packets.
@@ -176,6 +181,7 @@ public class MainActivity extends Activity implements OnClickListener {
     // Four emotions
     private enum Moods {
         HAPPY, ANGRY, RELAXED, SAD, NEUTRAL;
+
         public String toString() {
             switch (this) {
                 case HAPPY:
@@ -243,6 +249,34 @@ public class MainActivity extends Activity implements OnClickListener {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         initializeMap();
+
+        FirebaseDatabase database = FirebaseDatabase.getInstance();
+        DatabaseReference myRef = database.getReference("choose-music");
+
+        myRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                Map<String, Object> databaseMap = (Map<String, Object>) dataSnapshot.getValue();
+                Log.d("DATABASE", databaseMap.toString());
+                for (Map.Entry<String, Object> entry : databaseMap.entrySet()) {
+                    List<String> songList = new ArrayList<>();
+                    for (Map.Entry<String, Map<String, String>> songEntry : ((Map<String, Map<String, String>>) entry.getValue()).entrySet()) {
+                        String link = songEntry.getValue().get("link");
+//                        Log.d("DATABASE", link);
+                        songList.add(link);
+                    }
+                    songMap.put(entry.getKey(), songList);
+                }
+                Log.d("DATABASE", songMap.toString());
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });
+
+
         beginTime = System.currentTimeMillis();
         // We need to set the context on MuseManagerAndroid before we can do anything.
         // This must come before other LibMuse API calls as it also loads the library.
@@ -295,6 +329,7 @@ public class MainActivity extends Activity implements OnClickListener {
     }
 
     private Map<String, List<String>> songMap = new HashMap<>();
+
     //open.spotify.com/track
     private void initializeMap() {
         List<String> happyList = new ArrayList<>();
@@ -306,25 +341,25 @@ public class MainActivity extends Activity implements OnClickListener {
         happyList.add("5sTC1imYc0QzNe3i5snLy7");
 
         List<String> sadList = new ArrayList<>();
-        sadList.add("7LVHVU3tWfcxj5aiPFEW4Q");
-        sadList.add("6N7JzrteJv8lsr1GWYyu0b");
-        sadList.add("3QCPCz4cU4LxHL4e0Y7Kpy");
-        sadList.add("6zeE5tKyr8Nu882DQhhSQI");
-        sadList.add("6mFkJmJqdDVQ1REhVfGgd1");
+        sadList.add("https://open.spotify.com/track/" + "7LVHVU3tWfcxj5aiPFEW4Q");
+        sadList.add("https://open.spotify.com/track/" + "6N7JzrteJv8lsr1GWYyu0b");
+        sadList.add("https://open.spotify.com/track/" + "3QCPCz4cU4LxHL4e0Y7Kpy");
+        sadList.add("https://open.spotify.com/track/" + "6zeE5tKyr8Nu882DQhhSQI");
+        sadList.add("https://open.spotify.com/track/" + "6mFkJmJqdDVQ1REhVfGgd1");
 
         List<String> angryList = new ArrayList<>();
-        angryList.add("6RJdYpFQwLyNfDc5FbjkgV");
-        angryList.add("3VZWVvHjzkG60FyVUkTcy5");
-        angryList.add("2QiqwOVUctPRVggO9G1Zs5");
-        angryList.add("1hR0fIFK2qRG3f3RF70pb7");
+        angryList.add("https://open.spotify.com/track/" + "6RJdYpFQwLyNfDc5FbjkgV");
+        angryList.add("https://open.spotify.com/track/" + "3VZWVvHjzkG60FyVUkTcy5");
+        angryList.add("https://open.spotify.com/track/" + "2QiqwOVUctPRVggO9G1Zs5");
+        angryList.add("https://open.spotify.com/track/" + "1hR0fIFK2qRG3f3RF70pb7");
 
         List<String> relaxedList = new ArrayList<>();
-        relaxedList.add("1vG6jMgSoqT3zG9tuDrL2E");
-        relaxedList.add("1WwAqeweh8B5WVO041pRFf");
+        relaxedList.add("https://open.spotify.com/track/" + "1vG6jMgSoqT3zG9tuDrL2E");
+        relaxedList.add("https://open.spotify.com/track/" + "1WwAqeweh8B5WVO041pRFf");
 
         List<String> neutralList = new ArrayList<>();
-        neutralList.add("7j4rAHvJaQLbxstJ1TnHu9");
-        neutralList.add("6lanRgr6wXibZr8KgzXxBl");
+        neutralList.add("https://open.spotify.com/track/" + "7j4rAHvJaQLbxstJ1TnHu9");
+        neutralList.add("https://open.spotify.com/track/" + "6lanRgr6wXibZr8KgzXxBl");
         neutralList.addAll(relaxedList);
         neutralList.addAll(happyList);
 
@@ -332,12 +367,12 @@ public class MainActivity extends Activity implements OnClickListener {
         songMap.put("sad", sadList);
         songMap.put("angry", angryList);
         songMap.put("sad", sadList);
-        songMap.put("neutral",neutralList);
+        songMap.put("neutral", neutralList);
     }
 
     private String getSong(String key) {
-        int index = (int)(Math.random() * songMap.get(key).size());
-        return "https://open.spotify.com/track/" + songMap.get(key).get(index);
+        int index = (int) (Math.random() * songMap.get(key).size());
+        return songMap.get(key).get(index);
     }
 
     protected void onPause() {
@@ -408,15 +443,12 @@ public class MainActivity extends Activity implements OnClickListener {
                 muse.disconnect();
             }
 
-        } else if (v.getId() == R.id.pause) {
+        } else if (v.getId() == R.id.rescan) {
 
             // The user has pressed the "Pause/Resume" button to either pause or
             // resume data transmission.  Toggle the state and pause or resume the
             // transmission on the headband.
-            if (muse != null) {
-                dataTransmission = !dataTransmission;
-                muse.enableDataTransmission(dataTransmission);
-            }
+            playingMusic = false;
         }
     }
 
@@ -430,21 +462,20 @@ public class MainActivity extends Activity implements OnClickListener {
      * one to provide context and the second to request the permission.
      * On an Android device running an earlier version, nothing is displayed
      * as the permission is granted from the manifest.
-     *
+     * <p>
      * If the permission is not granted, then Muse 2016 (MU-02) headbands will
      * not be discovered and a SecurityException will be thrown.
      */
     private void ensurePermissions() {
 
         if (ContextCompat.checkSelfPermission(this,
-                Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED)
-        {
+                Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             // We don't have the ACCESS_COARSE_LOCATION permission so create the dialogs asking
             // the user to grant us the permission.
 
             DialogInterface.OnClickListener buttonListener =
                     new DialogInterface.OnClickListener() {
-                        public void onClick(DialogInterface dialog, int which){
+                        public void onClick(DialogInterface dialog, int which) {
                             dialog.dismiss();
                             ActivityCompat.requestPermissions(MainActivity.this,
                                     new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
@@ -484,8 +515,9 @@ public class MainActivity extends Activity implements OnClickListener {
     /**
      * You will receive a callback to this method each time there is a change to the
      * connection state of one of the headbands.
-     * @param p     A packet containing the current and prior connection states
-     * @param muse  The headband whose state changed.
+     *
+     * @param p    A packet containing the current and prior connection states
+     * @param muse The headband whose state changed.
      */
     public void receiveMuseConnectionPacket(final MuseConnectionPacket p, final Muse muse) {
 
@@ -536,8 +568,9 @@ public class MainActivity extends Activity implements OnClickListener {
      * You will receive a callback to this method each time the headband sends a MuseDataPacket
      * that you have registered.  You can use different listeners for different packet types or
      * a single listener for all packet types as we have done here.
-     * @param p     The data packet containing the data from the headband (eg. EEG data)
-     * @param muse  The headband that sent the information.
+     *
+     * @param p    The data packet containing the data from the headband (eg. EEG data)
+     * @param muse The headband that sent the information.
      */
     public void receiveMuseDataPacket(final MuseDataPacket p, final Muse muse) {
         writeDataPacketToFile(p);
@@ -555,8 +588,8 @@ public class MainActivity extends Activity implements OnClickListener {
         final long n = p.valuesSize();
         switch (p.packetType()) {
             case EEG:
-                assert(eegBuffer.length >= n);
-                getEegChannelValues(eegBuffer,p);
+                assert (eegBuffer.length >= n);
+                getEegChannelValues(eegBuffer, p);
                 eegStale = true;
                 break;
 //            case ACCELEROMETER:
@@ -565,13 +598,13 @@ public class MainActivity extends Activity implements OnClickListener {
 //                accelStale = true;
 //                break;
             case ALPHA_ABSOLUTE:
-                assert(alphaBuffer.length >= n);
-                getEegChannelValues(alphaBuffer,p);
+                assert (alphaBuffer.length >= n);
+                getEegChannelValues(alphaBuffer, p);
                 alphaStale = true;
                 break;
             case BETA_ABSOLUTE:
-                assert(betaBuffer.length >= n);
-                getEegChannelValues(betaBuffer,p);
+                assert (betaBuffer.length >= n);
+                getEegChannelValues(betaBuffer, p);
                 betaStale = true;
                 break;
             case BATTERY:
@@ -586,8 +619,9 @@ public class MainActivity extends Activity implements OnClickListener {
      * You will receive a callback to this method each time an artifact packet is generated if you
      * have registered for the ARTIFACTS data type.  MuseArtifactPackets are generated when
      * eye blinks are detected, the jaw is clenched and when the headband is put on or removed.
-     * @param p     The artifact packet with the data from the headband.
-     * @param muse  The headband that sent the information.
+     *
+     * @param p    The artifact packet with the data from the headband.
+     * @param muse The headband that sent the information.
      */
     public void receiveMuseArtifactPacket(final MuseArtifactPacket p, final Muse muse) {
     }
@@ -595,7 +629,7 @@ public class MainActivity extends Activity implements OnClickListener {
     /**
      * Helper methods to get different packet values.  These methods simply store the
      * data in the buffers for later display in the UI.
-     *
+     * <p>
      * getEegChannelValue can be used for any EEG or EEG derived data packet type
      * such as EEG, ALPHA_ABSOLUTE, ALPHA_RELATIVE or HSI_PRECISION.  See the documentation
      * of MuseDataPacketType for all of the available values.
@@ -633,7 +667,7 @@ public class MainActivity extends Activity implements OnClickListener {
                 if (recorderButton.getText().toString().equals("Start Recording")) {
                     recorderButton.setText("Stop Recording");
                     startingTime = System.currentTimeMillis();
-                    noOfTime ++;
+                    noOfTime++;
                 } else {
                     recorderButton.setText("Start Recording");
                     endTime = System.currentTimeMillis();
@@ -654,8 +688,8 @@ public class MainActivity extends Activity implements OnClickListener {
         connectButton.setOnClickListener(this);
         Button disconnectButton = (Button) findViewById(R.id.disconnect);
         disconnectButton.setOnClickListener(this);
-        Button pauseButton = (Button) findViewById(R.id.pause);
-        pauseButton.setOnClickListener(this);
+        Button rescanButton = (Button) findViewById(R.id.rescan);
+        rescanButton.setOnClickListener(this);
 
         spinnerAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item);
         Spinner musesSpinner = (Spinner) findViewById(R.id.muses_spinner);
@@ -664,7 +698,7 @@ public class MainActivity extends Activity implements OnClickListener {
 
     /**
      * The runnable that is used to update the UI at 60Hz.
-     *
+     * <p>
      * We update the UI from this Runnable instead of in packet handlers
      * because packets come in at high frequency -- 220Hz or more for raw EEG
      * -- and it only makes sense to update the UI at about 60fps. The update
@@ -709,7 +743,7 @@ public class MainActivity extends Activity implements OnClickListener {
                 stopTime = System.currentTimeMillis();
                 if (connected) {
                     String url = getSong(determineMood().toLowerCase());
-                    TextView mood = (TextView)findViewById(R.id.mood);
+                    TextView mood = (TextView) findViewById(R.id.mood);
                     mood.setText("You are feeling " + determineMood().toLowerCase());
                     Intent songIntent = new Intent(Intent.ACTION_VIEW);
                     songIntent.setData(Uri.parse(url));
@@ -717,7 +751,7 @@ public class MainActivity extends Activity implements OnClickListener {
                     playingMusic = true;
                 } else if (stopTime - beginTime >= 25000) {
                     playingMusic = true;
-                    TextView mood = (TextView)findViewById(R.id.mood);
+                    TextView mood = (TextView) findViewById(R.id.mood);
                     mood.setText("You are feeling happy");
                     Intent songIntent = new Intent(Intent.ACTION_VIEW);
                     songIntent.setData(Uri.parse(getSong("happy")));
@@ -776,12 +810,11 @@ public class MainActivity extends Activity implements OnClickListener {
 //        acc_y.setText(String.format("%6.2f", accelBuffer[1]));
 //        acc_z.setText(String.format("%6.2f", accelBuffer[2]));
 //    }
-
     private void updateEeg() {
-        TextView tp9 = (TextView)findViewById(R.id.eeg_tp9);
-        TextView fp1 = (TextView)findViewById(R.id.eeg_af7);
-        TextView fp2 = (TextView)findViewById(R.id.eeg_af8);
-        TextView tp10 = (TextView)findViewById(R.id.eeg_tp10);
+        TextView tp9 = (TextView) findViewById(R.id.eeg_tp9);
+        TextView fp1 = (TextView) findViewById(R.id.eeg_af7);
+        TextView fp2 = (TextView) findViewById(R.id.eeg_af8);
+        TextView tp10 = (TextView) findViewById(R.id.eeg_tp10);
         tp9.setText(String.format("%6.2f", eegBuffer[0]));
         fp1.setText(String.format("%6.2f", eegBuffer[1]));
         fp2.setText(String.format("%6.2f", eegBuffer[2]));
@@ -792,13 +825,13 @@ public class MainActivity extends Activity implements OnClickListener {
     }
 
     private void updateAlpha() {
-        TextView elem1 = (TextView)findViewById(R.id.elem1);
+        TextView elem1 = (TextView) findViewById(R.id.elem1);
         elem1.setText(String.format("%6.2f", alphaBuffer[0]));
-        TextView elem2 = (TextView)findViewById(R.id.elem2);
+        TextView elem2 = (TextView) findViewById(R.id.elem2);
         elem2.setText(String.format("%6.2f", alphaBuffer[1]));
-        TextView elem3 = (TextView)findViewById(R.id.elem3);
+        TextView elem3 = (TextView) findViewById(R.id.elem3);
         elem3.setText(String.format("%6.2f", alphaBuffer[2]));
-        TextView elem4 = (TextView)findViewById(R.id.elem4);
+        TextView elem4 = (TextView) findViewById(R.id.elem4);
         elem4.setText(String.format("%6.2f", alphaBuffer[3]));
 
         avgAlpha = getAvg(alphaBuffer[0], alphaBuffer[1], alphaBuffer[2], alphaBuffer[3]);
@@ -807,13 +840,13 @@ public class MainActivity extends Activity implements OnClickListener {
     }
 
     private void updateBeta() {
-        TextView beta1 = (TextView)findViewById(R.id.beta1);
+        TextView beta1 = (TextView) findViewById(R.id.beta1);
         beta1.setText(String.format("%6.2f", betaBuffer[0]));
-        TextView beta2 = (TextView)findViewById(R.id.beta2);
+        TextView beta2 = (TextView) findViewById(R.id.beta2);
         beta2.setText(String.format("%6.2f", betaBuffer[1]));
-        TextView beta3 = (TextView)findViewById(R.id.beta3);
+        TextView beta3 = (TextView) findViewById(R.id.beta3);
         beta3.setText(String.format("%6.2f", betaBuffer[2]));
-        TextView beta4 = (TextView)findViewById(R.id.beta4);
+        TextView beta4 = (TextView) findViewById(R.id.beta4);
         beta4.setText(String.format("%6.2f", betaBuffer[3]));
 
         avgBeta = getAvg(betaBuffer[0], betaBuffer[1], betaBuffer[2], betaBuffer[3]);
@@ -827,16 +860,16 @@ public class MainActivity extends Activity implements OnClickListener {
         for (double d : nums) {
             if (d > 0) {
                 sum += d;
-                count ++;
+                count++;
             }
         }
-        return (count > 0)?(sum / count):0;
+        return (count > 0) ? (sum / count) : 0;
     }
 
     // Determine which mood the user is in
     private String determineMood() {
         // Change valence values
-        double valence = Math.round(eegRight / 50 - eegLeft / 50  - relativeX / 50);
+        double valence = Math.round(eegRight / 50 - eegLeft / 50 - relativeX / 50);
         double arousal = Math.round(avgBetaLong * 100 - avgAlphaLong * 100 - relativeY * 100);
         if ((arousal > 0) && (valence > 0)) {
             return (Moods.HAPPY.toString());
@@ -849,7 +882,6 @@ public class MainActivity extends Activity implements OnClickListener {
         }
         return (Moods.NEUTRAL.toString());
     }
-
 
 
     //--------------------------------------
@@ -865,7 +897,7 @@ public class MainActivity extends Activity implements OnClickListener {
             Looper.prepare();
             fileHandler.set(new Handler());
             final File dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-            final File file = new File(dir, "new_muse_file.muse" );
+            final File file = new File(dir, "new_muse_file.muse");
             // MuseFileWriter will append to an existing file.
             // In this case, we want to start fresh so the file
             // if it exists.
@@ -881,7 +913,8 @@ public class MainActivity extends Activity implements OnClickListener {
     /**
      * Writes the provided MuseDataPacket to the file.  MuseFileWriter knows
      * how to write all packet types generated from LibMuse.
-     * @param p     The data packet to write.
+     *
+     * @param p The data packet to write.
      */
     private void writeDataPacketToFile(final MuseDataPacket p) {
         Handler h = fileHandler.get();
@@ -902,7 +935,8 @@ public class MainActivity extends Activity implements OnClickListener {
         Handler h = fileHandler.get();
         if (h != null) {
             h.post(new Runnable() {
-                @Override public void run() {
+                @Override
+                public void run() {
                     MuseFileWriter w = fileWriter.get();
                     // Annotation strings can be added to the file to
                     // give context as to what is happening at that point in
@@ -918,9 +952,10 @@ public class MainActivity extends Activity implements OnClickListener {
 
     /**
      * Reads the provided .muse file and prints the data to the logcat.
-     * @param name  The name of the file to read.  The file in this example
-     *              is assumed to be in the Environment.DIRECTORY_DOWNLOADS
-     *              directory.
+     *
+     * @param name The name of the file to read.  The file in this example
+     *             is assumed to be in the Environment.DIRECTORY_DOWNLOADS
+     *             directory.
      */
     private void playMuseFile(String name) {
 
@@ -949,7 +984,7 @@ public class MainActivity extends Activity implements OnClickListener {
                     " id: " + Integer.toString(id) +
                     " timestamp: " + String.valueOf(timestamp));
 
-            switch(type) {
+            switch (type) {
                 // EEG messages contain raw EEG data or DRL/REF data.
                 // EEG derived packets like ALPHA_RELATIVE and artifact packets
                 // are stored as MUSE_ELEMENTS messages.
