@@ -10,6 +10,8 @@ import android.app.Activity;
 import android.provider.ContactsContract;
 import android.widget.SimpleCursorAdapter;
 
+import java.util.HashMap;
+
 public class PlaylistActivity extends ListActivity implements LoaderManager.LoaderCallbacks<Cursor>
 {
 

@@ -7,6 +7,8 @@ package com.choosemuse.example.libmuse;
 
 import java.io.File;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 import java.util.concurrent.atomic.AtomicReference;
@@ -36,10 +38,12 @@ import com.choosemuse.libmuse.ResultLevel;
 import com.spotify.sdk.android.authentication.AuthenticationClient;
 import com.spotify.sdk.android.authentication.AuthenticationRequest;
 import com.spotify.sdk.android.authentication.AuthenticationResponse;
+import com.spotify.sdk.android.player.Config;
 import com.spotify.sdk.android.player.ConnectionStateCallback;
 import com.spotify.sdk.android.player.Error;
 import com.spotify.sdk.android.player.Player;
 import com.spotify.sdk.android.player.PlayerEvent;
+import com.spotify.sdk.android.player.Spotify;
 import com.spotify.sdk.android.player.SpotifyPlayer;
 
 import android.Manifest;
@@ -70,7 +74,11 @@ import org.w3c.dom.Text;
 
 import kaaes.spotify.webapi.android.SpotifyApi;
 import kaaes.spotify.webapi.android.SpotifyService;
+import kaaes.spotify.webapi.android.models.Pager;
 import kaaes.spotify.webapi.android.models.PlaylistSimple;
+import kaaes.spotify.webapi.android.models.PlaylistTrack;
+import retrofit.Callback;
+import retrofit.RetrofitError;
 
 /**
  * This example will illustrate how to connect to a Muse headband,
@@ -117,6 +125,24 @@ public class MainActivity extends Activity implements OnClickListener,
 
     private Player mPlayer;
     private SpotifyService spotify;
+
+
+    /*
+    HashMap<String, String> happyMusicList = new HashMap<>();
+    HashMap<String, String> sadMusicList = new HashMap<>();
+    HashMap<String, String> angryMusicList = new HashMap<>();
+    HashMap<String, String> relaxedMusicList = new HashMap<>();
+    */
+
+    ArrayList<String> happyMusicList = new ArrayList<>();
+    ArrayList<String> sadMusicList = new ArrayList<>();
+    ArrayList<String> angryMusicList = new ArrayList<>();
+    ArrayList<String> relaxedMusicList = new ArrayList<>();
+
+    int happyMusicListIndex = 0;
+    int sadMusicListIndex = 0;
+    int angryMusicListIndex = 0;
+    int relaxedMusicListIndex = 0;
 
     ////////////////////////
 
@@ -306,6 +332,45 @@ public class MainActivity extends Activity implements OnClickListener,
         builder.setScopes(new String[]{"user-read-private", "streaming"});
         AuthenticationRequest request = builder.build();
         AuthenticationClient.openLoginActivity(this, REQUEST_CODE, request);
+
+        /*
+        happyMusicList.put("Pharrell Williams - Happy", "6NPVjNh8Jhru9xOmyQigds");
+        happyMusicList.put("The Fratellis - Whistle For The Choir", "3jp7Ryj1sX3riA7NQaVlLd");
+        happyMusicList.put("Emma Stevens - A Place Called You", "4NBghCuVbhxnXWnMcRHXOt");
+        happyMusicList.put("Hollywood Ending - Not Another Song About Love", "3Ar4cp3V0SeWXEuRelC86p");
+
+        sadMusicList.put("Coldplay - Fix You", "7LVHVU3tWfcxj5aiPFEW4Q");
+        sadMusicList.put("Clair De Lune - Debussy", "6N7JzrteJv8lsr1GWYyu0b");
+        sadMusicList.put("The Girl with the Flaxen Hair - Debussy.", "3QCPCz4cU4LxHL4e0Y7Kpy");
+
+        angryMusicList.put("Disturbed - Stricken", "6RJdYpFQwLyNfDc5FbjkgV");
+        angryMusicList.put("Disturbed - Asylum", "3VZWVvHjzkG60FyVUkTcy5");
+        angryMusicList.put("Wake Up - Remastered", "2QiqwOVUctPRVggO9G1Zs5");
+
+        relaxedMusicList.put("Spirit Cold - Tall Heights", "1vG6jMgSoqT3zG9tuDrL2E");
+        relaxedMusicList.put("Weather - Molly Parden", "1WwAqeweh8B5WVO041pRFf");
+        relaxedMusicList.put("Alexander Jean - Whiskey and Morphine", "");
+        relaxedMusicList.put("Christina Perri - A Thousand Years", "6lanRgr6wXibZr8KgzXxBl");
+        */
+
+        happyMusicList.add("6NPVjNh8Jhru9xOmyQigds");
+        happyMusicList.add("3jp7Ryj1sX3riA7NQaVlLd");
+        happyMusicList.add("4NBghCuVbhxnXWnMcRHXOt");
+        happyMusicList.add("3Ar4cp3V0SeWXEuRelC86p");
+
+        sadMusicList.add("7LVHVU3tWfcxj5aiPFEW4Q");
+        sadMusicList.add("6N7JzrteJv8lsr1GWYyu0b");
+        sadMusicList.add("3QCPCz4cU4LxHL4e0Y7Kpy");
+
+        angryMusicList.add( "6RJdYpFQwLyNfDc5FbjkgV");
+        angryMusicList.add("3VZWVvHjzkG60FyVUkTcy5");
+        angryMusicList.add("2QiqwOVUctPRVggO9G1Zs5");
+
+        relaxedMusicList.add("1vG6jMgSoqT3zG9tuDrL2E");
+        relaxedMusicList.add("1WwAqeweh8B5WVO041pRFf");
+        relaxedMusicList.add( "7j4rAHvJaQLbxstJ1TnHu9");
+        relaxedMusicList.add("6lanRgr6wXibZr8KgzXxBl");
+
 
     }
 
@@ -905,7 +970,34 @@ public class MainActivity extends Activity implements OnClickListener,
         }
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
+        super.onActivityResult(requestCode, resultCode, intent);
 
+        // Check if result comes from the correct activity
+        if (requestCode == REQUEST_CODE) {
+            AuthenticationResponse response = AuthenticationClient.getResponse(resultCode, intent);
+            if (response.getType() == AuthenticationResponse.Type.TOKEN) {
+                Config playerConfig = new Config(this, response.getAccessToken(), CLIENT_ID);
+                accessToken = response.getAccessToken();
+                Spotify.getPlayer(playerConfig, this, new SpotifyPlayer.InitializationObserver() {
+                    @Override
+                    public void onInitialized(SpotifyPlayer spotifyPlayer) {
+                        mPlayer = spotifyPlayer;
+                        mPlayer.addConnectionStateCallback(MainActivity.this);
+                        mPlayer.addNotificationCallback(MainActivity.this);
+                    }
+
+                    @Override
+                    public void onError(Throwable throwable) {
+                        Log.e("MainActivity", "Could not initialize player: " + throwable.getMessage());
+                    }
+                });
+
+
+            }
+        }
+    }
 
     @Override
     public void onPlaybackEvent(PlayerEvent playerEvent) {
@@ -947,8 +1039,87 @@ public class MainActivity extends Activity implements OnClickListener,
         // Most (but not all) of the Spotify Web API endpoints require authorisation.
         // If you know you'll only use the ones that don't require authorisation you can skip this step
         api.setAccessToken(accessToken);
-
         spotify = api.getService();
+
+        playMusicBasedOnMood();
+
+        /*
+        spotify.getPlaylists(userId, new Callback<Pager<PlaylistSimple>>() {
+            @Override
+            public void success(Pager<PlaylistSimple> lPlaylist, retrofit.client.Response response) {
+                Log.d("Playlist Success", lPlaylist.toString());
+                Log.d("Playlist Success", response.toString());
+                Log.d("Playlist URI - ", lPlaylist.items.get(0).uri);
+                //playlistId = lPlaylist.items.get(0).uri;
+                tracksTest(spotify, lPlaylist.items.get(0).id);
+                for (PlaylistSimple p : lPlaylist.items) {
+                    // Log.d("Playlist URI - ", p.uri);
+                    //mPlayer.playUri(null, p.uri, 0, 0);
+                    //mPlayer.queue(null, p.uri);
+                    //PlaylistTracksInformation x = p.tracks;
+                    //Log.d("PlaylistTracksInfo", x.href);
+                }
+
+            }
+
+            @Override
+            public void failure(RetrofitError error) {
+                Log.d("Playlist failure", error.toString());
+            }
+        });
+        */
+    }
+
+    private void playMusicBasedOnMood() {
+        /*
+        if ((arousal > 0) && (valence > 0)) {
+            return (Moods.HAPPY.toString() + coordinates);
+        } else if ((arousal > 0) && (valence < 0)) {
+            return (Moods.ANGRY.toString() + coordinates);
+        } else if ((arousal < 0) && (valence > 0)) {
+            return (Moods.RELAXED.toString() + coordinates);
+        } else if ((arousal < 0) && (valence < 0)) {
+            return (Moods.SAD.toString() + coordinates);
+        }
+
+         */
+
+        String mood = determineMood();
+        if (mood.startsWith("HAPPY")) {
+            mPlayer.playUri(null, happyMusicList.get(happyMusicListIndex), 0, 0);
+            happyMusicListIndex++;
+        } else if (mood.startsWith("ANGRY")) {
+            mPlayer.playUri(null, angryMusicList.get(angryMusicListIndex), 0, 0);
+            angryMusicListIndex++;
+        } else if (mood.startsWith("SAD")) {
+            mPlayer.playUri(null, sadMusicList.get(sadMusicListIndex), 0, 0);
+            sadMusicListIndex++;
+        } else {
+            mPlayer.playUri(null, relaxedMusicList.get(relaxedMusicListIndex), 0, 0);
+            relaxedMusicListIndex++;
+        }
+
+    }
+
+    private void tracksTest(SpotifyService spotify, String playlistId) {
+
+        spotify.getPlaylistTracks(userId, playlistId, null, new Callback<Pager<PlaylistTrack>>() {
+            @Override
+            public void success(Pager<PlaylistTrack> playlistTrackPager, retrofit.client.Response response) {
+
+                for (PlaylistTrack t : playlistTrackPager.items) {
+                    Log.d("PlaylistTrack", t.track.uri);
+                    //mPlayer.queue(null, t.track.uri);
+                }
+                mPlayer.playUri(null, playlistTrackPager.items.get(0).track.uri, 0, 0);
+                Log.d("PlaylistTrack", "Attempting to play " + playlistTrackPager.items.get(0).track.uri);
+            }
+
+            @Override
+            public void failure(RetrofitError error) {
+                Log.d("PlayListTrack FAILURE", error.toString());
+            }
+        });
     }
 
     /*@Override
@@ -964,6 +1135,14 @@ public class MainActivity extends Activity implements OnClickListener,
     @Override
     public void onConnectionMessage(String message) {
         Log.d("MainActivity", "Received connection message: " + message);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        Spotify.destroyPlayer(this);
+        super.onDestroy();
     }
 
 
