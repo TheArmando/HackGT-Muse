@@ -1,0 +1,1 @@
+angular.module('museWebInterfaceApp', ['ngRoute', 'ngAnimate', 'login', 'firebase', 'navBar', 'chooseMusic', 'about']);

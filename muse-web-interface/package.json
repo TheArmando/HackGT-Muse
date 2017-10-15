@@ -1,0 +1,17 @@
+
+        {
+        "name": "muse-web-interface",
+  "version": "1.0.0",
+  "description": "Web Interface for Muse Based Music Player",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "Caitlin",
+  "license": "MIT",
+  "dependencies": {
+    "body-parser": "^1.15.2",
+    "express": "^4.14.0"
+  }
+}
