@@ -33,6 +33,14 @@ import com.choosemuse.libmuse.MuseManagerAndroid;
 import com.choosemuse.libmuse.MuseVersion;
 import com.choosemuse.libmuse.Result;
 import com.choosemuse.libmuse.ResultLevel;
+import com.spotify.sdk.android.authentication.AuthenticationClient;
+import com.spotify.sdk.android.authentication.AuthenticationRequest;
+import com.spotify.sdk.android.authentication.AuthenticationResponse;
+import com.spotify.sdk.android.player.ConnectionStateCallback;
+import com.spotify.sdk.android.player.Error;
+import com.spotify.sdk.android.player.Player;
+import com.spotify.sdk.android.player.PlayerEvent;
+import com.spotify.sdk.android.player.SpotifyPlayer;
 
 import android.Manifest;
 import android.app.Activity;
@@ -44,6 +52,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Looper;
 import android.os.Handler;
+import android.support.v4.app.Fragment;
 import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -58,6 +67,10 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 
 import org.w3c.dom.Text;
+
+import kaaes.spotify.webapi.android.SpotifyApi;
+import kaaes.spotify.webapi.android.SpotifyService;
+import kaaes.spotify.webapi.android.models.PlaylistSimple;
 
 /**
  * This example will illustrate how to connect to a Muse headband,
@@ -80,7 +93,33 @@ import org.w3c.dom.Text;
  * 7. You can pause/resume data transmission with the button at the bottom of the screen.
  * 8. To disconnect from the headband, press "Disconnect"
  */
-public class MainActivity extends Activity implements OnClickListener {
+public class MainActivity extends Activity implements OnClickListener,
+        SpotifyPlayer.NotificationCallback,
+        ConnectionStateCallback {
+
+    // Spotify variables are here
+
+    // TODO: Replace with your client ID
+    private static final String CLIENT_ID = "2a41fbadd1084964ad05307f4fc7bb93";
+    // TODO: Replace with your redirect URI
+    private static final String REDIRECT_URI = "hackgtspotify://callback";
+    private static final String AUTHENTICATION_URL = "https://accounts.spotify.com/authorize";
+
+    private static PlaylistSimple thePlaylist;
+
+    // Request code that will be used to verify if the result comes from correct activity
+    // Can be any integer
+    private static final int REQUEST_CODE = 1337;
+
+    private String accessToken = "";
+    final String url ="https://api.spotify.com/v1/users/{user_id}/playlists/{playlist_id}/track";
+    String userId = "armando75x";
+
+    private Player mPlayer;
+    private SpotifyService spotify;
+
+    ////////////////////////
+
 
     /**
      * Tag used for logging purposes.
@@ -258,9 +297,19 @@ public class MainActivity extends Activity implements OnClickListener {
         // Start our asynchronous updates of the UI.
         handler.post(tickUi);
         handler.post(getMood);
+
+
+        // Spotify Initialization
+        AuthenticationRequest.Builder builder = new AuthenticationRequest.Builder(CLIENT_ID,
+                AuthenticationResponse.Type.TOKEN,
+                REDIRECT_URI);
+        builder.setScopes(new String[]{"user-read-private", "streaming"});
+        AuthenticationRequest request = builder.build();
+        AuthenticationClient.openLoginActivity(this, REQUEST_CODE, request);
+
     }
 
-    protected void onPause() {
+    public void onPause() {
         super.onPause();
         // It is important to call stopListening when the Activity is paused
         // to avoid a resource leak from the LibMuse library.
@@ -856,6 +905,68 @@ public class MainActivity extends Activity implements OnClickListener {
         }
     }
 
+
+
+    @Override
+    public void onPlaybackEvent(PlayerEvent playerEvent) {
+        Log.d("MainActivity", "Playback event received: " + playerEvent.name());
+        switch (playerEvent) {
+            // Handle event type as necessary
+            default:
+                break;
+        }
+    }
+
+    @Override
+    public void onPlaybackError(Error error) {
+        Log.d("MainActivity", "Playback error received: " + error.name());
+        switch (error) {
+            // Handle error type as necessary
+            default:
+                break;
+        }
+    }
+
+
+    @Override
+    public void onLoggedOut() {
+        Log.d("MainActivity", "User logged out");
+    }
+
+    @Override
+    public void onLoginFailed(Error error) {
+        Log.d("MainActivity", "Login failed - " + error.toString());
+    }
+
+    @Override
+    public void onLoggedIn() {
+        Log.d("MainActivity", "User logged in");
+
+        SpotifyApi api = new SpotifyApi();
+
+        // Most (but not all) of the Spotify Web API endpoints require authorisation.
+        // If you know you'll only use the ones that don't require authorisation you can skip this step
+        api.setAccessToken(accessToken);
+
+        spotify = api.getService();
+    }
+
+    /*@Override
+    public void onLoginFailed(Error error) {
+        Log.d("MainActivity", "Login failed - " + error.toString());
+    }*/
+
+    @Override
+    public void onTemporaryError() {
+        Log.d("MainActivity", "Temporary error occurred");
+    }
+
+    @Override
+    public void onConnectionMessage(String message) {
+        Log.d("MainActivity", "Received connection message: " + message);
+    }
+
+
     //--------------------------------------
     // Listener translators
     //
@@ -887,6 +998,8 @@ public class MainActivity extends Activity implements OnClickListener {
         }
     }
 
+
+
     class DataListener extends MuseDataListener {
         final WeakReference<MainActivity> activityRef;
 
@@ -903,5 +1016,6 @@ public class MainActivity extends Activity implements OnClickListener {
         public void receiveMuseArtifactPacket(final MuseArtifactPacket p, final Muse muse) {
             activityRef.get().receiveMuseArtifactPacket(p, muse);
         }
+
     }
 }

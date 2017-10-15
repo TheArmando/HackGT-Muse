@@ -32,12 +32,15 @@ repositories {
 
 dependencies {
     compile files('libs/libmuse_android.jar')
+    // This library handles authentication and authorization
+    // This is the bootstrap stuff
+    // compile 'com.beardedhen:androidbootstrap:{2.3.2}'
+    // This library handles music playback
     compile 'com.android.support:support-v4:25.3.1'
     compile 'com.android.support:appcompat-v7:25.3.1'
     compile 'com.android.support.constraint:constraint-layout:1.0.2'
     compile 'com.github.kaaes:spotify-web-api-android:0.4.1'
-    // This library handles authentication and authorization
     compile 'com.spotify.sdk:spotify-auth:1.0.0@aar'
-    // This library handles music playback
     compile 'com.spotify.sdk:spotify-player:24-noconnect-2.20b@aar'
+    testCompile 'junit:junit:4.12'
 }
